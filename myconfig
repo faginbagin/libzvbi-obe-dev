@@ -1,0 +1,4 @@
+CPPFLAGS=-I/usr/include/libpng10 ./configure --build x86_64-linux-gnu --enable-proxy \
+	--prefix=$HOME/build CFLAGS="-g" \
+	LDFLAGS="-Wl,--as-needed"
+
