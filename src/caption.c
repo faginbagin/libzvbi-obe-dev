@@ -934,13 +934,21 @@ caption_command(vbi_decoder *vbi, struct caption *cc,
 			set_cursor(ch, 1, row);
 
 		if (c2 & 0x10) {
+/*
+PAC is supposed to be non-destructive.
+This code erases everything from the beginning of the line to the new column position
 			col = ch->col;
 
 			for (i = (c2 & 14) * 2; i > 0 && col < COLUMNS - 1; i--)
 				ch->line[col++] = cc->transp_space[chan >> 2];
+*/
 
-			if (col > ch->col)
-				ch->col = ch->col1 = col;
+			/* What I think is correct */
+			col = (c2 & 14) * 2 + 1;
+                        // printf("PAC %d,%d ch->col=%d ch->col1=%d\n", row, col, ch->col, ch->col1);
+			if (col >= COLUMNS)
+				col = COLUMNS-1;
+                        ch->col = ch->col1 = col;
 
 			ch->attr.italic = FALSE;
 			ch->attr.foreground = VBI_WHITE;
@@ -1001,6 +1009,10 @@ caption_command(vbi_decoder *vbi, struct caption *cc,
 				ch->attr.italic = TRUE;
 				ch->attr.foreground = VBI_WHITE;
 			}
+			// Midrow codes advance the cursor, like displayable space
+			vbi_char c = ch->attr;
+			c.unicode = 0x20;
+			put_char(cc, ch, c);
 		}
 
 		return;
@@ -1187,11 +1199,19 @@ caption_command(vbi_decoder *vbi, struct caption *cc,
 		switch (c2) {
 		case 0x21 ... 0x23:	/* Misc Control Codes, Tabs	001 c111  010 00xx */
 // not verified
+/*
+Tab offsets should be non-destructive
 			col = ch->col;
 
 			for (i = c2 & 3; i > 0 && col < COLUMNS - 1; i--)
 				ch->line[col++] = cc->transp_space[chan >> 2];
+*/
 
+			/* What I think is correct */
+                        // printf("TO %d ch->col=%d ch->col1=%d\n", (c2 & 3), ch->col, ch->col1);
+			col = ch->col + (c2 & 3);
+			if (col >= COLUMNS)
+				col = COLUMNS-1;
 			if (col > ch->col)
 				ch->col = ch->col1 = col;
 
