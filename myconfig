@@ -1,4 +1,14 @@
-CPPFLAGS=-I/usr/include/libpng10 ./configure --build x86_64-linux-gnu --enable-proxy \
-	--prefix=$HOME/build CFLAGS="-g" \
-	LDFLAGS="-Wl,--as-needed"
-
+#--includedir=\${prefix}/include \
+#--libdir=\${prefix}/lib/x86_64-linux-gnu \
+#--libexecdir=\${prefix}/lib/x86_64-linux-gnu \
+./configure \
+--build=x86_64-linux-gnu \
+--prefix=$HOME/usr \
+--mandir=\${prefix}/share/man \
+--infodir=\${prefix}/share/info \
+--sysconfdir=/etc \
+--localstatedir=/var \
+--disable-maintainer-mode \
+--disable-dependency-tracking \
+--enable-proxy \
+"$@"
