@@ -37,12 +37,6 @@
 
 #define elements(array) (sizeof(array) / sizeof(array[0]))
 
-#define ITV_DEBUG(x) /* x */
-#define XDS_SEP_DEBUG(x) /* x */
-#define XDS_SEP_DUMP(x) /* x */
-#define CC_DUMP(x) /* x */
-#define CC_TEXT_DUMP(x) /* x */
-
 static inline void
 caption_send_event(vbi_decoder *vbi, vbi_event *ev)
 {
@@ -466,8 +460,7 @@ xds_decoder(vbi_decoder *vbi, int _class, int type,
 			return; /* no event */
 		}
 
-		if (0)
-			printf("[type %d cycle %08x class %d neq %d]\n",
+                debug1(&_vbi_global_log, "[type %d cycle %08x class %d neq %d]",
 			       type, vbi->cc.info_cycle[_class], _class, neq);
 
 		if (neq) /* first occurence of this type with this data */
@@ -589,10 +582,10 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 	int c2 = vbi_unpar8 (buf[1]);
 	unsigned int class, type;
 
-	XDS_SEP_DEBUG(printf("XDS %02x %02x\n", buf[0], buf[1]));
+	debug1(&_vbi_global_log, "XDS %02x %02x", buf[0], buf[1]);
 
 	if ((c1 | c2) < 0) {
-		XDS_SEP_DEBUG(printf("XDS tx error, discard current packet\n"));
+		debug1(&_vbi_global_log, "XDS tx error, discard current packet");
 
 		if (sp) {
 			sp->count = 0;
@@ -609,7 +602,7 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 
 		if (class > elements(cc->sub_packet)
 		    || c2 > (int) elements(cc->sub_packet[0])) {
-			XDS_SEP_DEBUG(printf("XDS ignore packet %d/0x%02x\n", class, c2));
+			debug1(&_vbi_global_log, "XDS ignore packet %d/0x%02x", class, c2);
 			cc->curr_sp = NULL;
 			return;
 		}
@@ -620,7 +613,7 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 			sp->chksum = c1 + c2;
 			sp->count = 2;
 		} else if (!sp->count) {
-			XDS_SEP_DEBUG(printf("XDS can't continue %d/0x%02x\n", class, c2));
+			debug1(&_vbi_global_log, "XDS can't continue %d/0x%02x", class, c2);
 			cc->curr_sp = NULL;
 		}
 
@@ -636,19 +629,18 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 		type = (sp - cc->sub_packet[0]) % elements(cc->sub_packet[0]);
 
 		if (sp->chksum & 0x7F) {
-			XDS_SEP_DEBUG(printf("XDS ignore packet %d/0x%02x, "
-					     "checksum error\n", class, type));
+			debug1(&_vbi_global_log, "XDS ignore packet %d/0x%02x, "
+					     "checksum error", class, type);
 		} else if (sp->count <= 2) {
-			XDS_SEP_DEBUG(printf("XDS ignore empty packet "
-					     "%d/0x%02x\n", class, type));
+			debug1(&_vbi_global_log, "XDS ignore empty packet "
+					     "%d/0x%02x", class, type);
 		} else {
+                        int i;
 			xds_decoder(vbi, class, type, sp->buffer, sp->count - 2);
 
-			XDS_SEP_DUMP(
-				for (i = 0; i < sp->count - 2; i++)
-					printf("%c", _vbi_to_ascii (sp->buffer[i]));
-				printf(" %d/0x%02x\n", class, type);
-			)
+                        for (i = 0; i < sp->count - 2; i++)
+                                debug1(&_vbi_global_log, "%c", _vbi_to_ascii (sp->buffer[i]));
+                        debug1(&_vbi_global_log, " %d/0x%02x", class, type);
 		}
 
 		sp->count = 0;
@@ -662,9 +654,9 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 			return;
 
 		if (sp->count >= 32 + 2) {
-			XDS_SEP_DEBUG(printf("XDS packet length overflow, discard %d/0x%02x\n",
-			     	(sp - cc->sub_packet[0]) / elements(cc->sub_packet[0]),
-				(sp - cc->sub_packet[0]) % elements(cc->sub_packet[0])));
+			debug1(&_vbi_global_log, "XDS packet length overflow, discard %d/0x%02x",
+			     	(int)((sp - cc->sub_packet[0]) / elements(cc->sub_packet[0])),
+				(int)((sp - cc->sub_packet[0]) % elements(cc->sub_packet[0])));
 
 			sp->count = 0;
 			sp->chksum = 0;
@@ -687,7 +679,7 @@ xds_separator(vbi_decoder *vbi, uint8_t *buf)
 static void
 itv_separator(vbi_decoder *vbi, struct caption *cc, char c)
 {
-	if (ITV_DEBUG(0 &&) !(vbi->event_mask & VBI_EVENT_TRIGGER))
+	if (!(vbi->event_mask & VBI_EVENT_TRIGGER))
 		return;
 
 	if (c >= 0x20) {
@@ -704,7 +696,7 @@ itv_separator(vbi_decoder *vbi, struct caption *cc, char c)
 	cc->itv_buf[cc->itv_count] = 0;
 	cc->itv_count = 0;
 
-	ITV_DEBUG(printf("ITV: <%s>\n", cc->itv_buf));
+	debug1(&_vbi_global_log, "ITV: <%s>", cc->itv_buf);
 
 	vbi_atvef_trigger(vbi, cc->itv_buf);
 }
@@ -905,6 +897,7 @@ caption_command(vbi_decoder *vbi, struct caption *cc,
 	c1 &= 7;
 
 	if (c2 >= 0x40) {	/* Preamble Address Codes  001 crrr  1ri xxxu */
+                debug1(&_vbi_global_log, "PAC %02x %02x", c1, c2);
 		int row = row_mapping[(c1 << 1) + ((c2 >> 5) & 1)];
 
 		if (row < 0 || !ch->mode)
@@ -945,7 +938,7 @@ This code erases everything from the beginning of the line to the new column pos
 
 			/* What I think is correct */
 			col = (c2 & 14) * 2 + 1;
-                        // printf("PAC %d,%d ch->col=%d ch->col1=%d\n", row, col, ch->col, ch->col1);
+                        //debug1(&_vbi_global_log, "PAC %d,%d ch->col=%d ch->col1=%d", row, col, ch->col, ch->col1);
 			if (col >= COLUMNS)
 				col = COLUMNS-1;
                         ch->col = ch->col1 = col;
@@ -971,6 +964,7 @@ This code erases everything from the beginning of the line to the new column pos
 	switch (c1) {
 	case 0:		/* Optional Attributes		001 c000  010 xxxt */
 // not verified
+                debug1(&_vbi_global_log, "Optional Attributes");
 		ch->attr.opacity = (c2 & 1) ? VBI_SEMI_TRANSPARENT : VBI_OPAQUE;
 		ch->attr.background = palette_mapping[(c2 >> 1) & 7];
 		return;
@@ -978,6 +972,7 @@ This code erases everything from the beginning of the line to the new column pos
 	case 1:
 		if (c2 & 0x10) {	/* Special Characters	001 c001  011 xxxx */
 // not verified
+                        debug1(&_vbi_global_log, "Special Character %02x", c2);
 			c2 &= 15;
 
 			if (c2 == 9) { // "transparent space"
@@ -997,6 +992,7 @@ This code erases everything from the beginning of the line to the new column pos
 			}
 		} else {		/* Midrow Codes		001 c001  010 xxxu */
 // not verified
+                        debug1(&_vbi_global_log, "Midrow Code %02x %02x", c1, c2);
 			ch->attr.flash = FALSE;
 			ch->attr.underline = c2 & 1;
 
@@ -1020,6 +1016,7 @@ This code erases everything from the beginning of the line to the new column pos
 	case 2:		/* Optional Extended Characters	001 c01f  01x xxxx */
 	case 3:
 		/* Send specs to the maintainer of this code */
+                debug1(&_vbi_global_log, "Optional Extended Chars %02x %02x", c1, c2);
 		return;
 
 	case 4:		/* Misc Control Codes		001 c10f  010 xxxx */
@@ -1028,6 +1025,7 @@ This code erases everything from the beginning of the line to the new column pos
 
 		switch (c2 & 15) {
 		case 0:		/* Resume Caption Loading	001 c10f  010 0000 */
+                        debug1(&_vbi_global_log, "RCL");
 			ch = switch_channel(cc, ch, chan & 3);
 
 			ch->mode = MODE_POP_ON;
@@ -1043,6 +1041,7 @@ This code erases everything from the beginning of the line to the new column pos
 		case 7:
 		{
 			int roll = (c2 & 7) - 3;
+                        debug1(&_vbi_global_log, "RU%d", roll);
 
 			ch = switch_channel(cc, ch, chan & 3);
 
@@ -1064,21 +1063,25 @@ This code erases everything from the beginning of the line to the new column pos
 
 		case 9:		/* Resume Direct Captioning	001 c10f  010 1001 */
 // not verified
+                        debug1(&_vbi_global_log, "RDC");
 			ch = switch_channel(cc, ch, chan & 3);
 			ch->mode = MODE_PAINT_ON;
 			return;
 
 		case 10:	/* Text Restart			001 c10f  010 1010 */
 // not verified
+                        debug1(&_vbi_global_log, "TR");
 			ch = switch_channel(cc, ch, chan | 4);
 			set_cursor(ch, 1, 0);
 			return;
 
 		case 11:	/* Resume Text Display		001 c10f  010 1011 */
+                        debug1(&_vbi_global_log, "RTD");
 			ch = switch_channel(cc, ch, chan | 4);
 			return;
 
 		case 15:	/* End Of Caption		001 c10f  010 1111 */
+                        debug1(&_vbi_global_log, "EOC");
 			ch = switch_channel(cc, ch, chan & 3);
 			ch->mode = MODE_POP_ON;
 
@@ -1102,11 +1105,13 @@ This code erases everything from the beginning of the line to the new column pos
 
 		case 8:		/* Flash On			001 c10f  010 1000 */
 // not verified
+                        debug1(&_vbi_global_log, "FON");
 			ch->attr.flash = TRUE;
 			return;
 
 		case 1:		/* Backspace			001 c10f  010 0001 */
 // not verified
+                        debug1(&_vbi_global_log, "BS");
 			if (ch->mode && ch->col > 1) {
 				ch->line[--ch->col] = cc->transp_space[chan >> 2];
 
@@ -1117,6 +1122,7 @@ This code erases everything from the beginning of the line to the new column pos
 			return;
 
 		case 13:	/* Carriage Return		001 c10f  010 1101 */
+                        debug1(&_vbi_global_log, "CR");
 			if (ch == cc->channel + 5)
 				itv_separator(vbi, cc, 0);
 
@@ -1155,6 +1161,7 @@ This code erases everything from the beginning of the line to the new column pos
 
 		case 4:		/* Delete To End Of Row		001 c10f  010 0100 */
 // not verified
+                        debug1(&_vbi_global_log, "DER");
 			if (!ch->mode)
 				return;
 
@@ -1172,6 +1179,7 @@ This code erases everything from the beginning of the line to the new column pos
 
 		case 12:	/* Erase Displayed Memory	001 c10f  010 1100 */
 // s1, s4: EDM always before EOC
+                        debug1(&_vbi_global_log, "EDM");
 			if (ch->mode != MODE_POP_ON)
 				erase_memory(cc, ch, ch->hidden);
 
@@ -1182,6 +1190,7 @@ This code erases everything from the beginning of the line to the new column pos
 
 		case 14:	/* Erase Non-Displayed Memory	001 c10f  010 1110 */
 // not verified
+                        debug1(&_vbi_global_log, "ENM");
 			if (ch->mode == MODE_POP_ON)
 				erase_memory(cc, ch, ch->hidden);
 
@@ -1208,7 +1217,7 @@ Tab offsets should be non-destructive
 */
 
 			/* What I think is correct */
-                        // printf("TO %d ch->col=%d ch->col1=%d\n", (c2 & 3), ch->col, ch->col1);
+                        debug1(&_vbi_global_log, "TO%d ch->col=%d ch->col1=%d", (c2 & 3), ch->col, ch->col1);
 			col = ch->col + (c2 & 3);
 			if (col >= COLUMNS)
 				col = COLUMNS-1;
@@ -1219,12 +1228,14 @@ Tab offsets should be non-destructive
 
 		case 0x2D:		/* Optional Attributes		001 c111  010 11xx */
 // not verified
+                        debug1(&_vbi_global_log, "Optional Attributes");
 			ch->attr.opacity = VBI_TRANSPARENT_FULL;
 			break;
 
 		case 0x2E:		/* Optional Attributes		001 c111  010 11xx */
 		case 0x2F:
 // not verified
+                        debug1(&_vbi_global_log, "Optional Attributes");
 			ch->attr.foreground = VBI_BLACK;
 			ch->attr.underline = c2 & 1;
 			break;
@@ -1272,11 +1283,7 @@ vbi_decode_caption(vbi_decoder *vbi, int line, uint8_t *buf)
 		break;
 
 	case 284:	/* NTSC */
-		CC_DUMP(
-			putchar(_vbi_to_ascii (buf[0]));
-			putchar(_vbi_to_ascii (buf[1]));
-			fflush(stdout);
-		)
+                debug2(&_vbi_global_log, "%c%c", _vbi_to_ascii (buf[0]), _vbi_to_ascii (buf[1]));
 
 		if (vbi_unpar8 (buf[0]) >= 0) {
 			if (c1 == 0) {
@@ -1308,11 +1315,7 @@ vbi_decode_caption(vbi_decoder *vbi, int line, uint8_t *buf)
 		buf[1] = c1; /*  room, design a special glyph? */
 	}
 
-	CC_DUMP(
-		putchar(_vbi_to_ascii (buf[0]));
-		putchar(_vbi_to_ascii (buf[1]));
-		fflush(stdout);
-	)
+        debug2(&_vbi_global_log, "%c%c", _vbi_to_ascii (buf[0]), _vbi_to_ascii (buf[1]));
 
 	switch (c1) {
 		cc_channel *ch;
@@ -1345,11 +1348,6 @@ vbi_decode_caption(vbi_decoder *vbi, int line, uint8_t *buf)
 		break;
 
 	default:
-		CC_TEXT_DUMP(
-			putchar(_vbi_to_ascii (buf[0]));
-			putchar(_vbi_to_ascii (buf[1]));
-			fflush(stdout);
-		)
 
 		ch = &cc->channel[(cc->curr_chan & 5) + field2 * 2];
 
